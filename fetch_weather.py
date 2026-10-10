@@ -125,6 +125,14 @@ def save_to_sqlite(temperature_forecasts, db_path="data.db"):
     conn.close()
     print(f"成功儲存 {insert_count} 筆氣溫預報至資料庫: {db_path}！")
 
+    # 同步儲存至 weather_data.csv (依作業 Prompt 要求)
+    conn = sqlite3.connect(db_path)
+    df_all = pd.read_sql_query("SELECT id, regionName, dataDate, MinT, MaxT FROM TemperatureForecasts", conn)
+    conn.close()
+    df_all["AvgT"] = ((df_all["MinT"] + df_all["MaxT"]) / 2.0).round(1)
+    df_all.to_csv("weather_data.csv", index=False, encoding="utf-8-sig")
+    print("成功匯出氣溫資料至 weather_data.csv！")
+
 # ==========================================
 # 驗證檢查：從資料庫查詢資料 (符合作業規定)
 # ==========================================

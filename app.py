@@ -98,18 +98,31 @@ def get_temp_label(temp):
         return "炎熱 (>30°C)"
 
 # ==========================================
-# 資料庫查詢與自癒函式
+# 資料庫查詢與即時載入函式 (無過期快取)
 # ==========================================
 DB_PATH = "data.db"
 
-@st.cache_data(ttl=600)
-def load_all_weather_data():
-    # 若資料庫不存在則自動嘗試產生
-    if not os.path.exists(DB_PATH) and os.path.exists("fetch_weather.py"):
-        import fetch_weather
-        raw = fetch_weather.fetch_weather_data()
-        parsed = fetch_weather.parse_temperature_forecasts(raw)
-        fetch_weather.save_to_sqlite(parsed)
+def load_all_weather_data(force_refresh=False):
+    # 若資料庫不存在、或要求強制更新、或資料庫中日期為舊資料(小於2026)，自動自 CWA 重新抓取
+    need_fetch = force_refresh or (not os.path.exists(DB_PATH))
+    if not need_fetch and os.path.exists(DB_PATH):
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            check_df = pd.read_sql_query("SELECT MAX(dataDate) as max_d FROM TemperatureForecasts", conn)
+            conn.close()
+            if check_df.empty or check_df["max_d"].iloc[0] is None or check_df["max_d"].iloc[0] < "2026":
+                need_fetch = True
+        except Exception:
+            need_fetch = True
+
+    if need_fetch and os.path.exists("fetch_weather.py"):
+        try:
+            import fetch_weather
+            payload = fetch_weather.fetch_weather_data()
+            records = fetch_weather.parse_temperature_forecasts(payload)
+            fetch_weather.save_to_sqlite(records)
+        except Exception as e:
+            st.warning(f"自動同步最新氣象資料時發生連線警告: {e}")
 
     conn = sqlite3.connect(DB_PATH)
     query = "SELECT id, regionName, dataDate, MinT, MaxT FROM TemperatureForecasts ORDER BY dataDate, id"
@@ -120,10 +133,16 @@ def load_all_weather_data():
     df["AvgT"] = ((df["MinT"] + df["MaxT"]) / 2.0).round(1)
     return df
 
-df_all = load_all_weather_data()
+# 側邊欄重新同步按鈕
+if st.sidebar.button("🔄 重新連線 CWA 同步即時預報"):
+    st.cache_data.clear()
+    df_all = load_all_weather_data(force_refresh=True)
+    st.rerun()
+else:
+    df_all = load_all_weather_data()
 
 if df_all.empty:
-    st.error("⚠️ 資料庫中尚無資料，請先執行 `fetch_weather.py` 抓取資料！")
+    st.error("⚠️ 資料庫中尚無資料，請點擊上方按鈕重新抓取資料！")
     st.stop()
 
 # 取得所有可用日期與地區

@@ -207,20 +207,43 @@ with col_left:
         color = get_temp_color(avgt)
         label = get_temp_label(avgt)
 
-        # Popup 詳細資訊內容 (HTML 排版)
+        # Popup 詳細資訊內容 (以 IFrame 封裝確保排版與點擊觸發)
         popup_html = f"""
-        <div style="font-family: sans-serif; min-width: 140px; padding: 4px;">
-            <h4 style="margin: 0 0 6px 0; color: #1E293B;">{region}</h4>
-            <div style="font-size: 13px; color: #475569; line-height: 1.5;">
-                <b>預報日期:</b> {selected_date}<br>
-                <b>最高氣溫:</b> <span style="color:#DC2626; font-weight:bold;">{maxt}°C</span><br>
-                <b>最低氣溫:</b> <span style="color:#2563EB; font-weight:bold;">{mint}°C</span><br>
-                <b>平均氣溫:</b> <b>{avgt}°C</b><br>
-                <b>體感狀態:</b> <span style="color:{color}; font-weight:bold;">{label}</span>
-            </div>
-        </div>
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                body {{
+                    font-family: Arial, "Microsoft JhengHei", sans-serif;
+                    margin: 0;
+                    padding: 4px;
+                    font-size: 13px;
+                    line-height: 1.5;
+                    color: #1E293B;
+                }}
+                h4 {{
+                    margin: 0 0 6px 0;
+                    font-size: 15px;
+                    color: #0F172A;
+                    border-bottom: 2px solid {color};
+                    padding-bottom: 4px;
+                }}
+                .item {{ margin: 3px 0; }}
+            </style>
+        </head>
+        <body>
+            <h4>{region}</h4>
+            <div class="item"><b>預報日期：</b>{selected_date}</div>
+            <div class="item"><b>最高氣溫：</b><span style="color:#DC2626; font-weight:bold;">{maxt}°C</span></div>
+            <div class="item"><b>最低氣溫：</b><span style="color:#2563EB; font-weight:bold;">{mint}°C</span></div>
+            <div class="item"><b>平均氣溫：</b><b>{avgt}°C</b></div>
+            <div class="item"><b>體感狀態：</b><span style="color:{color}; font-weight:bold;">{label}</span></div>
+        </body>
+        </html>
         """
-        popup = folium.Popup(popup_html, max_width=220)
+        iframe = folium.IFrame(html=popup_html, width=170, height=140)
+        popup = folium.Popup(iframe, max_width=200)
 
         # 圓形標記 CircleMarker
         folium.CircleMarker(
@@ -235,18 +258,18 @@ with col_left:
             tooltip=f"{region}：平均 {avgt}°C (點擊查看詳情)"
         ).add_to(m)
 
-        # 在地圖圓圈內標記平均溫度文字
+        # 在地圖圓圈內標記平均溫度文字 (pointer-events: none 確保不阻擋圓圈點擊事件)
         folium.Marker(
             location=coords,
             icon=folium.DivIcon(
                 icon_size=(36, 36),
                 icon_anchor=(18, 12),
-                html=f'<div style="font-size: 11px; font-weight: bold; color: white; text-align: center; text-shadow: 1px 1px 2px #333;">{int(round(avgt))}°</div>'
+                html=f'<div style="font-size: 11px; font-weight: bold; color: white; text-align: center; text-shadow: 1px 1px 2px #333; pointer-events: none; user-select: none;">{int(round(avgt))}°</div>'
             )
         ).add_to(m)
 
-    # 在 Streamlit 中渲染地圖
-    st_folium(m, height=480, width=None)
+    # 在 Streamlit 中渲染地圖 (returned_objects=[] 避免點擊觸發全頁 Rerun 而關閉彈出視窗)
+    st_folium(m, height=480, width=None, returned_objects=[])
 
 # ----------------- 右側：資料表格與指標 -----------------
 with col_right:
